@@ -31,15 +31,16 @@
   \item{\dots}{further arguments to methods.}
 }
 
-\author{Lam Si Tung Ho, Cécile Ané}
+\author{Lam Si Tung Ho}
 \seealso{
 \code{\link{phylolm}}
 }
 
 \examples{
-p = rcoal(50)
-y = rTrait(phy=p,model="BM")
-fit = phylolm(y~1,phy=p,model="BM")
+set.seed(321123)
+tre = rcoal(50)
+y = rTrait(phy=tre,model="BM")
+fit = phylolm(y~1,phy=tre,model="BM")
 summary(fit)
 vcov(fit)
 }
