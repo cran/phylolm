@@ -1,4 +1,3 @@
-\encoding{latin1}
 \name{phylolm-methods}
 \alias{print.phylolm}
 \alias{summary.phylolm}
@@ -26,8 +25,15 @@
   \item{x}{an object of class \code{"phylolm"}.}
   \item{object}{an object of class \code{"phylolm"}.}
   \item{digits}{number of digits to show in summary method.}
-  \item{type}{Currently, only the "response" type is implemented. It returns the raw residuals, that is, the differences between the observed responses and the predicted values. They are phylogenetically correlated.}
-  \item{newdata}{an optional data frame to provide the predictor values at which predictions should be made. If omitted, the fitted values are used. Currently, predictions are made for new species whose placement in the tree is unknown. Only their covariate information is used. The prediction for the trend model is not currently implemented.}
+  \item{type}{Currently, only the "response" type is implemented. It
+  returns the raw residuals, that is, the differences between the
+  observed responses and the predicted values. They are phylogenetically
+  correlated.}
+  \item{newdata}{an optional data frame to provide the predictor values
+  at which predictions should be made. If omitted, the fitted values are
+  used. Currently, predictions are made for new species whose placement
+  in the tree is unknown. Only their covariate information is used. The
+  prediction for the trend model is not currently implemented.}
   \item{\dots}{further arguments to methods.}
 }
 
@@ -39,7 +45,7 @@
 \examples{
 set.seed(321123)
 tre = rcoal(50)
-y = rTrait(phy=tre,model="BM")
+y = rTrait(n=1,phy=tre,model="BM")
 fit = phylolm(y~1,phy=tre,model="BM")
 summary(fit)
 vcov(fit)

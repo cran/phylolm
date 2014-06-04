@@ -3,17 +3,21 @@
 \alias{phylolm-package}
 \docType{package}
 \title{Phylogenetic Linear Regression}
-\description{The phylolm package provides a function for fitting phylogenetic linear regression models and phylogenetic logistic regression. The computation uses an algorithm that is linear in the number of tips in the tree. The package also provides a function for simulating continuous or binary traits along the tree.}
+\description{The phylolm package provides functions for fitting
+  phylogenetic linear regression models and phylogenetic logistic
+  regression. The computation uses an algorithm that is linear in the
+  number of tips in the tree. The package also provides functions for
+  simulating continuous and binary traits along the tree.}
 \details{
 \tabular{ll}{
 Package: \tab phylolm\cr
 Type: \tab Package\cr
-Version: \tab 2.0\cr
-Date: \tab 2013-08-09\cr
+Version: \tab 2.1\cr
+Date: \tab 2014-06-04\cr
 License: \tab GPL (>= 2)\cr
 }
 }
-\author{Lam Si Tung Ho, Cécile Ané
+\author{Lam Si Tung Ho, Cécile Ané, Robert Lachlan
 
-Maintainer: Lam Si Tung Ho <lamho@stat.wisc.edu>
+Maintainer: Lam Si Tung Ho <lamho86@gmail.com>
 }

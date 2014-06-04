@@ -1,10 +1,11 @@
-\encoding{latin1}
 \name{phyloglm-methods}
 \alias{print.phyloglm}
 \alias{summary.phyloglm}
 \alias{print.summary.phyloglm}
 \alias{residuals.phyloglm}
 \alias{vcov.phyloglm}
+\alias{logLik.phyloglm}
+\alias{print.logLik.phyloglm}
 \alias{plot.phyloglm}
 \title{Methods for class 'phyloglm'.}
 \description{These are method functions for class 'phyloglm'.}
@@ -13,6 +14,7 @@
 \method{summary}{phyloglm}(object, ...)
 \method{residuals}{phyloglm}(object,type = c("response"), ...)
 \method{vcov}{phyloglm}(object, ...)
+\method{logLik}{phyloglm}(object, ...)
 \method{plot}{phyloglm}(x, ...)
 }
 \arguments{
