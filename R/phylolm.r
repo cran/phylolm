@@ -297,6 +297,14 @@ print.logLik.phylolm <- function (x, ...) {
   cat("'log Lik.' ",x$logLik," (df=",x$df,")\n", sep = "")
 }
 ################################################
+AIC.logLik.phylolm <- function(object, ..., k=2) {
+  return(k*object$df - 2*object$logLik)
+}
+################################################
+AIC.phylolm <- function(object, ..., k=2) {
+  return(AIC(logLik(object),k))
+}
+################################################
 predict.phylolm <- function(object, newdata=NULL, ...){
   if (object$model=="trend")
     stop("Predicting for trend model has not been implemented.")
@@ -309,6 +317,6 @@ predict.phylolm <- function(object, newdata=NULL, ...){
 }
 ################################################
 plot.phylolm <-function(x, ...){
-  plot(x$y, fitted(x), xlab = "Observed value", ylab = "Fitted value")
+  plot(x$y, fitted(x), xlab = "Observed value", ylab = "Fitted value", ...)
 }
 ################################################

@@ -1,4 +1,4 @@
-phyloglm <- function(formula, data=list(), phy, method=c("MPLE","IG10"),
+phyloglm <- function(formula, data=list(), phy, method=c("logistic_MPLE","logistic_IG10","poisson_GEE"),
                      btol = 10, log.alpha.bound = 4,
                      start.beta=NULL, start.alpha=NULL)
 {
@@ -28,29 +28,53 @@ phyloglm <- function(formula, data=list(), phy, method=c("MPLE","IG10"),
   }
   X = model.matrix(attr(mf, "terms"), data=mf); 
   y = model.response(mf);
-  if ( sum(!(y %in% c(0,1))) )
-    stop("The model by Ives and Garland requires a binary response (dependent variable).")
-  if (var(y)==0) stop("the response (dependent variable) is always 0 or always 1.")
   dk = ncol(X) # number of predictors, including intercept, = dimension of beta
-  btouch = 0
-  proposedBetaSD = 0.05
-
-  ### preparing for generalized tree-structure	
-  dis = pruningwise.distFromRoot(phy)
-  D = max(dis[1:n]) - dis[1:n]
-  D = D - mean(D)
-  externalEdge = (des <= n)
-  phy$edge.length[externalEdge] <- phy$edge.length[externalEdge] + D[des[externalEdge]]
-  # phy is now ultrametric
-  times <- pruningwise.branching.times(phy)
-  names(times) <- (n+1):(n+phy$Nnode)
-  Tmax <- max(times)
-  #plot(phy); add.scale.bar(); cat("Tmax=",Tmax,"\ntimes are:",times,"\n")
-  intern = which(phy$edge[,2] > n)
-  lok = rep(-1,N)
-  lok[intern] = des[intern]-n
-
   
+  dis = pruningwise.distFromRoot(phy) # distance from root to each tip
+  
+  ## check condition and initialize for Logistic models
+  if (method %in% c("logistic_MPLE","logistic_IG10")) {    
+    if ( sum(!(y %in% c(0,1))) )
+      stop("The model by Ives and Garland requires a binary response (dependent variable).")
+    if (var(y)==0) stop("the response (dependent variable) is always 0 or always 1.")  
+    
+    btouch = 0
+    proposedBetaSD = 0.05
+    
+    ### preparing for generalized tree-structure      
+    D = max(dis[1:n]) - dis[1:n]
+    D = D - mean(D)
+    externalEdge = (des <= n)
+    phy$edge.length[externalEdge] <- phy$edge.length[externalEdge] + D[des[externalEdge]]
+    # phy is now ultrametric
+    times <- pruningwise.branching.times(phy)
+    names(times) <- (n+1):(n+phy$Nnode)
+    Tmax <- max(times)
+    #plot(phy); add.scale.bar(); cat("Tmax=",Tmax,"\ntimes are:",times,"\n")
+    intern = which(phy$edge[,2] > n)
+    lok = rep(-1,N)
+    lok[intern] = des[intern]-n
+  } 
+  
+  ## check condition and initialize for Poisson models
+  if (method == "poisson_GEE") {
+    if ( (!isTRUE(all(y == floor(y)))) )
+      stop("The Poisson regression requires an integer response (dependent variable).")
+    if ( sum(y<0) )  
+      stop("The Poisson regression requires a positive response (dependent variable).")
+  }
+  
+  ## transform branch lengths fot poisson_GEE model
+  transf.branch.lengths_poisson_GEE <- function(beta) {
+    if (dk > 1) g = X%*%beta else g = rep(1,n)*beta
+    mu = as.vector(exp(g))
+    root.edge = 0 
+    diag = sqrt(mu/dis[1:n])
+    edge.length = phy$edge.length
+    return(list(edge.length,root.edge,diag))
+  }
+    
+  ## transform branch lengths fot Logistic models
   transf.branch.lengths <- function(B,lL) {
     if (dk > 1) g = X%*%B else g = rep(1,n)*B
     mu = as.vector(1/(1+exp(-g)))
@@ -270,105 +294,175 @@ phyloglm <- function(formula, data=list(), phy, method=c("MPLE","IG10"),
        loglik=double(1))$loglik
   }
 	
+  ## GEE method for poisson_GEE regression
+  ## Iterate: beta_{t+1} = beta_t + I^{-1}[(AX)'R^{-1}(Y-mu)]
+  ## I = (AX)'R^{-1}(AX)
+  ## R is the correlation matrix
+  
+  iterate_beta <- function(beta) {
+    difbeta = 1
+    maxint = 10000
+    count = 0
+    curbeta = beta
+   
+    while ((difbeta > 1e-10 )&&(count < maxint)) {
+      mu = as.vector(exp(X%*%curbeta))      
+      temp = transf.branch.lengths_poisson_GEE(curbeta)      
+      dia = temp[[3]]
+      #print(dia)
+      if (sum(which(mu==0))>0) break
+      comp = three.point.compute(temp[1:2],(y-mu)/dia,mu*X/dia)
+      invI = solve(comp$XX)
+      newbeta = curbeta + invI%*%comp$Xy      
+      count = count + 1
+      difbeta = sum(abs(newbeta - curbeta))
+      curbeta = newbeta              
+    }
+   
+    mu = as.vector(exp(X%*%curbeta))
+    r = (y-mu)/sqrt(mu)    
+    phi = sum(r^2)/(n-dk)
+    covBSE = phi*invI
+    BSE = sqrt(diag(covBSE))    
+    if (difbeta > 1e-10) convergeflag = 1 else convergeflag = 0       
+    return(list(beta = as.vector(curbeta),BSE = BSE,covBSE = covBSE,phi = phi,convergeflag = convergeflag))  
+  }
 	
   ## Starting values
   if (is.null(start.beta)) {
-    fit = glm(y~X-1,family=binomial)
-    ## logistf(y~X-1) for regular logistic regression with 
-    ## Firth correction. But doesn't work with intercept only.
-    startB = fit$coefficients
-    if (any(abs(X%*%startB) >= btol)) {
-      warning("The estimated coefficients in the absence of phylogenetic signal lead\n  to some linear predictors beyond 'btol'. Increase btol?\n  Starting from beta=0 other than intercept.")
-      startB = numeric(dk)
-      iint = match( "(Intercept)", colnames(X))
-      if (!is.na(iint))
-        startB[iint] = log(sum(y==1)/sum(y==0))
-      if (any(abs(X%*%startB) >= btol))
-        startB[iint] = 0 # all beta's are zero -> linear predictors are all 0.
+    if (method %in% c("logistic_MPLE","logistic_IG10")) {    
+      fit = glm(y~X-1,family=binomial)
+      ## logistf(y~X-1) for regular logistic regression with 
+      ## Firth correction. But doesn't work with intercept only.
+      startB = fit$coefficients
+      if (any(abs(X%*%startB) >= btol)) {
+        warning("The estimated coefficients in the absence of phylogenetic signal lead\n  to some linear predictors beyond 'btol'. Increase btol?\n  Starting from beta=0 other than intercept.")
+        startB = numeric(dk)
+        iint = match( "(Intercept)", colnames(X))
+        if (!is.na(iint))
+          startB[iint] = log(sum(y==1)/sum(y==0))
+        if (any(abs(X%*%startB) >= btol))
+          startB[iint] = 0 # all beta's are zero -> linear predictors are all 0.
+      }
+    }
+    if (method == "poisson_GEE") {
+      fit = glm(y~X-1,family=poisson)
+      start.beta = fit$coefficients
     }
   } else {
-    if (length(start.beta)!=dk)
-      stop(paste("start.beta shoudl be of length",dk))
-    startB = as.vector(start.beta)
-    if (any(abs(X%*%startB) >= btol))
-      stop("With these starting beta values, some linear predictors are beyond 'btol'.\n  Increase btol or choose new starting values for beta.")
-  }
-  if (is.null(start.alpha))
-    startlL = log(Tmax) # i.e. alpha = 1/Tmax
-  else {
-    if (length(start.alpha)!=1) stop("start.alpha should be a single positive value")
-    if (start.alpha<=0) stop("start.alpha should be a positive value")
-    startlL = -log(start.alpha)
-    if (abs(startlL - log(Tmax)) >= log.alpha.bound) {
-      tmp = 'start.alpha is outside the bounds, which are\n  exp(+/-log.alpha.bound)/Tmax: '
-      tmp = paste(tmp,signif(exp(-log.alpha.bound)/Tmax,3),",",
-        signif(exp(log.alpha.bound)/Tmax,3),' (Tmax=',Tmax,').',
-        '\n  Change start.alpha or increase log.alpha.bound.',sep="")
-      stop(tmp)
+      if (length(start.beta)!=dk)
+        stop(paste("start.beta shoudl be of length",dk))
+      if (method %in% c("logistic_MPLE","logistic_IG10")) {
+        startB = as.vector(start.beta)
+      if (any(abs(X%*%startB) >= btol))
+        stop("With these starting beta values, some linear predictors are beyond 'btol'.\n  Increase btol or choose new starting values for beta.")
+      }  
     }
+  
+  if (method %in% c("logistic_MPLE","logistic_IG10")) {
+    if (is.null(start.alpha))
+      startlL = log(Tmax) # i.e. alpha = 1/Tmax
+    else {
+      if (length(start.alpha)!=1) stop("start.alpha should be a single positive value")
+      if (start.alpha<=0) stop("start.alpha should be a positive value")
+      startlL = -log(start.alpha)
+      if (abs(startlL - log(Tmax)) >= log.alpha.bound) {
+        tmp = 'start.alpha is outside the bounds, which are\n  exp(+/-log.alpha.bound)/Tmax: '
+        tmp = paste(tmp,signif(exp(-log.alpha.bound)/Tmax,3),",",
+                    signif(exp(log.alpha.bound)/Tmax,3),' (Tmax=',Tmax,').',
+                    '\n  Change start.alpha or increase log.alpha.bound.',sep="")
+        stop(tmp)
+      }
+    }  
   }
-
+  
+  
   ### Estimation
-  if (method == "IG10"){
-    plogreg = plogregfunct(startB,startlL)
-    lL = plogreg$lL
-    B = plogreg$B
-    convergeflag = plogreg$convergeflag
+  if (method %in% c("logistic_MPLE","logistic_IG10")) {
+    if (method == "logistic_IG10"){
+      plogreg = plogregfunct(startB,startlL)
+      lL = plogreg$lL
+      B = plogreg$B
+      convergeflag = plogreg$convergeflag
+    }
+    if (method == "logistic_MPLE") {
+      opt <- optim(par=c(startB,startlL), fn=npllh, method="L-BFGS-B", control=list(factr=1e12))
+      #optss<-list(reltol=.Machine$double.eps^0.5, maxit=100000, parscale=10)
+      #opt<-subplex(par=cB, fn = function(par){robfunct(par)}, control=optss)  	
+      B  = opt$par[1:dk]
+      lL = opt$par[dk+1]
+      convergeflag = opt$convergence
+    }
+    
+    if ((lL - log(Tmax) + 0.02) > log.alpha.bound) {
+      warn = paste("the estimate of 'alpha' (",1/exp(lL),
+                   ") reached the lower bound (",1/Tmax/exp(log.alpha.bound),
+                   ").\n This may reflect a flat likelihood at low alpha values near 0,\n",
+                   " meaning that the phylogenetic correlation is estimated to be maximal\n",
+                   " under the model in Ives and Garland (2010).", sep="")
+      warning(warn)	
+    }
+    if ((lL - log(Tmax) - 0.02) < - log.alpha.bound) {
+      warn = paste("the estimate of 'alpha' (",1/exp(lL),
+                   ") reached the upper bound (",exp(log.alpha.bound)/Tmax,
+                   ").\n This may simply reflect a flat likelihood at large alpha values,\n",
+                   " meaning that the phylogenetic correlation is estimated to be negligible.",sep="")
+      warning(warn)	
+    }
+    if (btouch == 1) 
+      warning("the boundary of the linear predictor has been reached during the optimization procedure.
+You can increase this bound by increasing 'btol'.")    
+    
+    plogregBSE = plogregBSEfunct(B,lL)
+    
+    results <- list(coefficients = B,
+                    alpha = 1/exp(lL),
+                    sd = plogregBSE$BSE,
+                    vcov = plogregBSE$covBSE,
+                    convergence = convergeflag
+    )
   }
-  if (method == "MPLE") {
-    opt <- optim(par=c(startB,startlL), fn=npllh, method="L-BFGS-B", control=list(factr=1e12))
-    #optss<-list(reltol=.Machine$double.eps^0.5, maxit=100000, parscale=10)
-    #opt<-subplex(par=cB, fn = function(par){robfunct(par)}, control=optss)		
-    B  = opt$par[1:dk]
-    lL = opt$par[dk+1]
-    convergeflag = opt$convergence
+  
+  if (method == "poisson_GEE") {
+    res = iterate_beta(as.vector(start.beta))        
+    results <- list(coefficients = res$beta,
+                    scale = res$phi,
+                    sd = res$BSE,
+                    vcov = res$covBSE,
+                    convergence = res$convergeflag
+    )    
   }
-
-  if ((lL - log(Tmax) + 0.02) > log.alpha.bound) {
-    warn = paste("the estimate of 'alpha' (",1/exp(lL),
-      ") reached the lower bound (",1/Tmax/exp(log.alpha.bound),
-      ").\n This may reflect a flat likelihood at low alpha values near 0,\n",
-      " meaning that the phylogenetic correlation is estimated to be maximal\n",
-      " under the model in Ives and Garland (2010).", sep="")
-    warning(warn)	
-  }
-  if ((lL - log(Tmax) - 0.02) < - log.alpha.bound) {
-    warn = paste("the estimate of 'alpha' (",1/exp(lL),
-      ") reached the upper bound (",exp(log.alpha.bound)/Tmax,
-      ").\n This may simply reflect a flat likelihood at large alpha values,\n",
-      " meaning that the phylogenetic correlation is estimated to be negligible.",sep="")
-    warning(warn)	
-  }
-  if (btouch == 1) 
-    warning("the boundary of the linear predictor has been reached during the optimization procedure.
-You can increase this bound by increasing 'btol'.")
-  if (convergeflag) warning("phyloglm failed to converge.\n")
-
-  plogregBSE = plogregBSEfunct(B,lL)
-
-  results <- list(coefficients = B,
-                  alpha = 1/exp(lL),
-                  sd = plogregBSE$BSE,
-                  vcov = plogregBSE$covBSE,
-                  convergence = convergeflag
-                  )
+  
+  if (results$converge) warning("phyloglm failed to converge.\n")
+  
   names(results$coefficients) = colnames(X)
   colnames(results$vcov) = colnames(X)
   rownames(results$vcov) = colnames(X)
   results$linear.predictors = as.vector(X %*% results$coefficients)
   names(results$linear.predictors) = names(y)
-  if (max(abs(results$linear.predictors)) + 0.01 > btol)
-    warning("the linear predictor reaches its bound for one (or more) tip.")
-  results$fitted.values = as.vector(1/(1+exp(-results$linear.predictors)))
+  
+  if (method %in% c("logistic_MPLE","logistic_IG10")) {
+    if (max(abs(results$linear.predictors)) + 0.01 > btol)
+      warning("the linear predictor reaches its bound for one (or more) tip.")  
+    results$fitted.values = as.vector(1/(1+exp(-results$linear.predictors)))
+    results$mean.tip.height = Tmax
+    results$logLik    = llh(results$fitted.values, results$alpha)
+    results$penlogLik = results$logLik + log(det(as.matrix(plogregBSE$info)))/2
+    results$aic       = -2*results$logLik + 2*(dk+1)
+  }  
+  
+  if (method == "poisson_GEE") {
+    results$fitted.values = as.vector(exp(-results$linear.predictors))    
+    results$logLik    = NA
+    results$penlogLik = NA
+    results$aic       = NA
+  }    
+  
   names(results$fitted.values ) = names(y)
   results$residuals = y - results$fitted.values
-  results$mean.tip.height = Tmax
   results$y = y
   results$n = n
-  results$d = dk
-  results$logLik    = llh(results$fitted.values, results$alpha)
-  results$penlogLik = results$logLik + log(det(as.matrix(plogregBSE$info)))/2
-  results$aic       = -2*results$logLik + 2*(dk+1)
+  results$d = dk  
   results$formula = formula
   results$call = match.call()
   results$method = method
@@ -382,13 +476,16 @@ You can increase this bound by increasing 'btol'.")
 print.phyloglm <- function(x, digits = max(3, getOption("digits") - 3), ...){
   cat("Call:\n")
   print(x$call)
-  aiclogLik = c(x$aic,x$logLik,x$penlogLik)
-  names(aiclogLik) = c("AIC","logLik","Pen.logLik")
-  print(aiclogLik, digits = digits)
+  if (x$method %in% c("logistic_MPLE","logistic_IG10")) {
+    aiclogLik = c(x$aic,x$logLik,x$penlogLik)
+    names(aiclogLik) = c("AIC","logLik","Pen.logLik")
+    print(aiclogLik, digits = digits)  
+  }  
   cat("\nParameter estimate(s) from ")
-  if (x$method=="IG10") cat("GEE approximation:\n")
-  else if (x$method=="MPLE") cat("MPLE:\n")
-  cat("alpha:",x$alpha,"\n")
+  if (x$method=="logistic_IG10") cat("GEE approximation:\n")
+  if (x$method=="logistic_MPLE") cat("MPLE:\n")
+  if (x$method=="poisson_GEE") cat("poisson_GEE:\n")
+  if (x$method %in% c("logistic_MPLE","logistic_IG10")) cat("alpha:",x$alpha,"\n")
   cat("\nCoefficients:\n")
   print(x$coefficients)
 }
@@ -398,15 +495,26 @@ summary.phyloglm <- function(object, ...) {
   zval <- coef(object) / se
   TAB <- cbind(Estimate = coef(object), StdErr = se, z.value = zval,
                p.value = 2*pnorm(-abs(zval)))
-  res <- list(call=object$call,
-              coefficients=TAB,
-              residuals = object$residuals,
-              alpha=object$alpha,
-              aic=object$aic, 		
-              logLik=object$logLik,
-              penlogLik=object$penlogLik,
-              method=object$method,
-              mean.tip.height=object$mean.tip.height)
+  if (object$method %in% c("logistic_MPLE","logistic_IG10")) {
+    res <- list(call=object$call,
+                coefficients=TAB,
+                residuals = object$residuals,
+                alpha=object$alpha,
+                aic=object$aic,   	
+                logLik=object$logLik,
+                penlogLik=object$penlogLik,
+                method=object$method,
+                mean.tip.height=object$mean.tip.height)  
+  }
+  
+  if (object$method == "poisson_GEE") {
+    res <- list(call=object$call,
+                coefficients=TAB,
+                residuals = object$residuals,
+                scale=object$scale,                
+                method=object$method)  
+  }
+  
   class(res) = "summary.phyloglm"
   res
 }
@@ -414,17 +522,24 @@ summary.phyloglm <- function(object, ...) {
 print.summary.phyloglm <- function(x, digits = max(3, getOption("digits") - 3), ...){
   cat("\nCall:\n")
   print(x$call)
-  aiclogLik = c(x$aic,x$logLik,x$penlogLik)
-  names(aiclogLik) = c("AIC","logLik","Pen.logLik")
-  print(aiclogLik, digits = digits)
+  if (x$method %in% c("logistic_MPLE","logistic_IG10")) {
+    aiclogLik = c(x$aic,x$logLik,x$penlogLik)
+    names(aiclogLik) = c("AIC","logLik","Pen.logLik")
+    print(aiclogLik, digits = digits)  
+  }  
   cat("\nMethod:",x$method)
-  cat("\nMean tip height:",x$mean.tip.height)
+  if (x$method %in% c("logistic_MPLE","logistic_IG10")) cat("\nMean tip height:",x$mean.tip.height)
   cat("\nParameter estimate(s):\n")
-  cat("alpha:",x$alpha,"\n")
+  if (x$method %in% c("logistic_MPLE","logistic_IG10")) cat("alpha:",x$alpha,"\n")
+  if (x$method == "poisson_GEE") cat("scale:",x$scale,"\n")
   cat("\nCoefficients:\n")
   printCoefmat(x$coefficients, P.values=FALSE, has.Pvalue=FALSE)
-  cat("\nNote: Wald-type p-values for coefficients, conditional on alpha=",
+  if (x$method %in% c("logistic_MPLE","logistic_IG10"))
+    cat("\nNote: Wald-type p-values for coefficients, conditional on alpha=",
       x$alpha,"\n",sep="")
+  if (x$method == "poisson_GEE") 
+    cat("\nNote: Wald-type p-values for coefficients, conditional on scale=",
+      x$scale,"\n",sep="")
   cat("\n")
 }
 ################################################
@@ -435,7 +550,7 @@ residuals.phyloglm <-function(object,type=c("response"), ...){
 }
 ################################################
 plot.phyloglm <-function(x, ...){
-  plot(fitted(x), x$residuals, xlab = "Fitted value", ylab = "Residuals")
+  plot(fitted(x), x$residuals, xlab = "Fitted value", ylab = "Residuals", ...)
   abline(h=0, lty = 2)
 }
 ################################################
@@ -452,4 +567,12 @@ logLik.phyloglm <- function(object, ...){
 ################################################
 print.logLik.phyloglm <- function (x, ...) {
   cat("'log Lik.' ",x$logLik," (df=",x$df,")\n", sep = "")
+}
+################################################
+AIC.logLik.phyloglm <- function(object, ..., k=2) {
+  return(k*object$df - 2*object$logLik)
+}
+################################################
+AIC.phyloglm <- function(object, ..., k=2) {
+  return(AIC(logLik(object),k=2))
 }

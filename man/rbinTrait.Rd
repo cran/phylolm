@@ -1,4 +1,4 @@
-\encoding{utf-8}
+\encoding{latin1}
 \name{rbinTrait}
 \alias{rbinTrait}
 \title{Binary trait simulation}
@@ -26,7 +26,7 @@ rbinTrait(n=1, phy, beta, alpha, X = NULL, model = c("LogReg"))
   If a design matrix \code{X} is provided, the length of \code{beta} should be
   equal to the number of columns in \code{X}.}
 
-\author{Lam Si Tung Ho and C. AnÃ© }
+\author{Lam Si Tung Ho and C. Ané }
 
 \references{
 Ives, A. R. and T. Garland, Jr. 2010. "Phylogenetic logistic regression

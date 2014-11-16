@@ -1,4 +1,4 @@
-\encoding{utf-8}
+\encoding{latin1}
 \name{rTrait}
 \alias{rTrait}
 
@@ -36,7 +36,7 @@ rTrait(n=1, phy, model=c("BM","OU","lambda","kappa","delta","EB","trend"),
   EB model, \code{trend=0}. These default choices correspond to the BM model.
 }
 
-\author{Lam Si Tung Ho and C. AnÃ©}
+\author{Lam Si Tung Ho and C. Ané}
 
 \seealso{
 \code{\link[ape]{rTraitCont}}.

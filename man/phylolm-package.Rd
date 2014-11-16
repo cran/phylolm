@@ -12,12 +12,12 @@
 \tabular{ll}{
 Package: \tab phylolm\cr
 Type: \tab Package\cr
-Version: \tab 2.1\cr
-Date: \tab 2014-06-04\cr
+Version: \tab 2.2\cr
+Date: \tab 2014-11-16\cr
 License: \tab GPL (>= 2)\cr
 }
 }
-\author{Lam Si Tung Ho, Cécile Ané, Robert Lachlan
+\author{Lam Si Tung Ho, Cécile Ané, Robert Lachlan, Kelsey Tarpinia
 
 Maintainer: Lam Si Tung Ho <lamho86@gmail.com>
 }
