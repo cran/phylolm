@@ -9,6 +9,8 @@
 \alias{print.logLik.phylolm}
 \alias{AIC.phylolm}
 \alias{AIC.logLik.phylolm}
+\alias{extractAIC.phylolm}
+\alias{nobs.phylolm}
 \alias{plot.phylolm}
 
 \title{Methods for class 'phylolm'.}
@@ -16,11 +18,12 @@
 \usage{
 \method{print}{phylolm}(x, digits = max(3, getOption("digits") - 3), ...)
 \method{summary}{phylolm}(object, ...)
+\method{nobs}{phylolm}(object, ...)
 \method{residuals}{phylolm}(object,type = c("response"), ...)
 \method{predict}{phylolm}(object, newdata = NULL, ...)
 \method{vcov}{phylolm}(object, ...)
 \method{logLik}{phylolm}(object, ...)
-\method{AIC}{phylolm}(object, ..., k=2)
+\method{AIC}{phylolm}(object, k=2, ...)
 \method{plot}{phylolm}(x, ...)
 }
 
