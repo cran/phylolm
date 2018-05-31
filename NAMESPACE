@@ -1,8 +1,9 @@
-useDynLib(phylolm)
+useDynLib(phylolm, .registration = TRUE)
 
 exportPattern("^[[:alpha:]]+")
 
 import(ape)
+import(future.apply)
 
 importFrom("graphics", "abline", "axis", "barplot", "layout", "plot")
 importFrom("stats", "AIC", "add.scope", "binomial", "coef",

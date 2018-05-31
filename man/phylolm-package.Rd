@@ -9,12 +9,12 @@ Other tools include functions to test the adequacy of a population tree.}
 \tabular{ll}{
 Package: \tab phylolm\cr
 Type: \tab Package\cr
-Version: \tab 2.5\cr
-Date: \tab 2016-10-16\cr
+Version: \tab 2.6\cr
+Date: \tab 2018-05-28\cr
 License: \tab GPL (>= 2)\cr
 }
 }
-\author{Lam Si Tung Ho, Cecile Ane, Robert Lachlan, Kelsey Tarpinia, Rachel Feldman, Qing Yu
+\author{Lam Si Tung Ho, Cecile Ane, Robert Lachlan, Kelsey Tarpinia, Rachel Feldman, Qing Yu, Wouter van der Bijl
 
 Maintainer: Lam Si Tung Ho <lamho86@gmail.com>
 }

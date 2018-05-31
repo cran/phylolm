@@ -52,6 +52,11 @@ phylolm(formula, data = list(), phy, model = c("BM", "OUrandomRoot",
   \eqn{[10^{-5},3]} for \eqn{\delta}{delta} and
   \eqn{[-3/T,0]} for \code{rate}, where \eqn{T} is the mean root-to-tip distance.
   \eqn{[10^{-16}, 10^{16}]} for the ratio \code{sigma2_error}/\code{sigma2} (if measurement errors is used).
+  
+  Bootstrapping can be parallelized using the \code{future} package on any future 
+  compatible back-end. For example, run \code{library(future); plan(multiprocess))}, 
+  after which bootstrapping will automatically occur in parallel. See 
+  \code{\link[future]{plan}} for options.
 }
 \value{
    \item{coefficients}{the named vector of coefficients.}

@@ -27,7 +27,12 @@ phyloglm(formula, data, phy, method = c("logistic_MPLE","logistic_IG10",
   \item{full.matrix}{if \code{TRUE}, the full matrix of bootstrap estimates (coefficients and alpha) will be returned.}
 }
 \details{
-This function uses an algorithm that is linear in the number of tips in the tree.
+  This function uses an algorithm that is linear in the number of tips in the tree.
+
+  Bootstrapping can be parallelized using the \code{future} package on any future 
+  compatible back-end. For example, run \code{library(future); plan(multiprocess))}, 
+  after which bootstrapping will automatically occur in parallel. See 
+  \code{\link[future]{plan}} for options.
 }
 \value{
   \item{coefficients}{the named vector of coefficients.}
