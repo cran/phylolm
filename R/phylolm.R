@@ -14,6 +14,38 @@ phylolm <- function(formula, data=list(), phy,
   if (is.null(phy$edge.length)) stop("the tree has no branch lengths.")
   if (is.null(phy$tip.label)) stop("the tree has no tip labels.")	
   tol = 1e-10	
+
+  mf = model.frame(formula=formula,data=data)
+  
+  
+  if (is.null(rownames(mf))) {
+   if (nrow(mf)!=length(phy$tip.label))
+      stop("number of rows in the data does not match the number of tips in the tree.")
+   warning("the data has no names, order assumed to be the same as tip labels in the tree.\n")
+  }
+  else { # the data frame has row names
+    taxa_without_data = setdiff(phy$tip.label, rownames(mf))
+    if (length(taxa_without_data)>0){
+      warning("will drop from the tree ", length(taxa_without_data), " taxa with missing data")
+      phy = drop.tip(phy, taxa_without_data)
+    }
+    if (length(phy$tip.label)<2)
+      stop("names of the data do not match with tip labels.")
+    taxa_notin_tree = setdiff(rownames(mf), phy$tip.label)
+    if (length(taxa_notin_tree)>0){
+      warning(length(taxa_notin_tree), " taxa not in the tree: their data will be ignored")
+      mf = mf[-which(rownames(mf) %in% taxa_notin_tree),,drop=F]
+    }
+    # now we should have that: nrow(mf)==length(phy$tip.label)
+    ordr = match(phy$tip.label, rownames(mf))
+    if (any(is.na(ordr))) # should never happen given earlier checks
+      stop("data names do not match with the tip labels.\n")
+    mf = mf[ordr,,drop=F]
+  }
+  X = model.matrix(attr(mf, "terms"), data=mf)
+  y = model.response(mf)
+  d = ncol(X)
+
   phy = reorder(phy,"pruningwise")
   n <- length(phy$tip.label)
   N <- dim(phy$edge)[1]
@@ -21,26 +53,7 @@ phylolm <- function(formula, data=list(), phy,
   anc <- phy$edge[, 1]
   des <- phy$edge[, 2]
   externalEdge <- des<=n
-  mf = model.frame(formula=formula,data=data)
-  if (nrow(mf)!=length(phy$tip.label))
-    stop("number of rows in the data does not match the number of tips in the tree.")
-  if (is.null(rownames(mf))) {
-   warning("the data has no names, order assumed to be the same as tip labels in the tree.\n")
-   data.names = phy$tip.label 
-  }
-  else data.names = rownames(mf)
-  order = match(data.names, phy$tip.label)
-  if (sum(is.na(order))>0) {
-   warning("data names do not match with the tip labels.\n")
-   rownames(mf) = data.names
-  } else {
-   tmp = mf
-   rownames(mf) = phy$tip.label
-   mf[order,] = tmp[1:nrow(tmp),]
-  }
-  X = model.matrix(attr(mf, "terms"), data=mf)
-  y = model.response(mf)
-  d = ncol(X)
+
   OU = c("OUrandomRoot","OUfixedRoot")
   flag = 0 # flag and D are used for OU model if tree is not ultrametric:
   D = NULL #            for the generalized 3-point structure
@@ -421,6 +434,29 @@ phylolm <- function(formula, data=list(), phy,
     ### Turn on warnings
     options(warn=0)
   }
+  
+  ## R squared
+  if (model %in% OU) {
+    RMS <- results$sigma2 / 2/results$optpar * n/(n-d)
+    RSSQ <- results$sigma2 / 2/results$optpar * n
+    
+  } else {
+    RMS <- results$sigma2 * n/(n-d)
+    RSSQ <- results$sigma2 * n
+  }
+  
+  xdummy <- matrix(rep(1, length(y)))
+  # local variables used in loglik function
+  d <- ncol(xdummy)
+  ole <- 4 + 2*d + d*d # output length
+  nullMod <- loglik(prm, y, xdummy)
+  
+  NMS <- nullMod$sigma2hat * n/(n-1)
+  NSSQ <- nullMod$sigma2hat * n
+
+  results$r.squared <- (NSSQ - RSSQ) / NSSQ
+  results$adj.r.squared <- (NMS - RMS) / NMS
+
   class(results) = "phylolm"
   return(results)
 }
@@ -466,7 +502,8 @@ summary.phylolm <- function(object, ...) {
               optpar=object$optpar, sigma2_error = object$sigma2_error, logLik=object$logLik,
               df=object$p, aic=object$aic, model=object$model,
               mean.tip.height=object$mean.tip.height,
-              bootNrep = ifelse(object$boot>0, object$boot - object$bootnumFailed, 0))
+              bootNrep = ifelse(object$boot>0, object$boot - object$bootnumFailed, 0),
+              r.squared=object$r.squared, adj.r.squared=object$adj.r.squared)
   if (res$bootNrep>0) {
     res$bootmean = object$bootmean
     res$bootsd = object$bootsd
@@ -503,8 +540,12 @@ print.summary.phylolm <- function(x, digits = max(3, getOption("digits") - 3), .
 
   cat("\nCoefficients:\n")
   printCoefmat(x$coefficients, P.values=TRUE, has.Pvalue=TRUE)
+  
+  cat("\nR-squared:", formatC(x$r.squared, digits = digits))
+  cat("\tAdjusted R-squared:", formatC(x$adj.r.squared, digits = digits), "\n")
+  
   if (!is.null(x$optpar)) {
-    cat("\nNote: p-values are conditional on ")
+    cat("\nNote: p-values and R-squared are conditional on ")
     if (x$model %in% c("OUrandomRoot","OUfixedRoot")) cat("alpha=",x$optpar,".",sep="")
     if (x$model %in% c("lambda","kappa","delta")) cat(x$model,"=",x$optpar,".",sep="")
     if (x$model=="EB") cat("rate=",x$optpar,".",sep="")

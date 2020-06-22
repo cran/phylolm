@@ -7,22 +7,29 @@ phyloglm <- function(formula, data=list(), phy, method=c("logistic_MPLE","logist
   if (is.null(phy$edge.length)) stop("the tree has no branch lengths.")
   if (is.null(phy$tip.label)) stop("the tree has no tip labels.")
   method = match.arg(method)
-  phy = reorder(phy,"pruningwise")
-  ## save original branch lengths for likelihood calculation
-  original.edge.length = phy$edge.length	
-  n <- length(phy$tip.label)
-  N <- dim(phy$edge)[1]
-  ROOT <- n + 1L
-  anc <- phy$edge[, 1]
-  des <- phy$edge[, 2]
+
   mf = model.frame(formula=formula,data=data)
-  if (nrow(mf)!=length(phy$tip.label))
-    stop("the number of rows in the data does not match the number of tips in the tree.")
-  if (is.null(rownames(mf)))
+  if (is.null(rownames(mf))){
+    if (nrow(mf)!=length(phy$tip.label))
+      stop("the number of rows in the data does not match the number of tips in the tree.")
     warning("the data has no names, order assumed to be the same as tip labels in the tree.\n")
-  else {
+  }
+  else { # the data frame has row names
+    taxa_without_data = setdiff(phy$tip.label, rownames(mf))
+    if (length(taxa_without_data)>0){
+      warning("will drop from the tree ", length(taxa_without_data), " taxa with missing data")
+      phy = drop.tip(phy, taxa_without_data)
+    }
+    if (length(phy$tip.label)<2)
+      stop("only 0 or 1 leaf with data on all variables: not enough.")
+    taxa_notin_tree = setdiff(rownames(mf), phy$tip.label)
+    if (length(taxa_notin_tree)>0){
+      warning(length(taxa_notin_tree), " taxa not in the tree: their data will be ignored")
+      mf = mf[-which(rownames(mf) %in% taxa_notin_tree),,drop=F]
+    }
+    # now we should have that: nrow(mf)==length(phy$tip.label)
     ordr = match(phy$tip.label,rownames(mf))
-    if (sum(is.na(ordr))>0)
+    if (any(is.na(ordr))) # should never happen given earlier checks
       stop("the row names in the data do not match the tip labels in the tree.\n")
     mf = mf[ordr,,drop=F]
   }
@@ -30,13 +37,22 @@ phyloglm <- function(formula, data=list(), phy, method=c("logistic_MPLE","logist
   y = model.response(mf);
   dk = ncol(X) # number of predictors, including intercept, = dimension of beta
   
+  phy = reorder(phy,"pruningwise")
+  ## save original branch lengths for likelihood calculation
+  original.edge.length = phy$edge.length
+  n <- length(phy$tip.label)
+  N <- dim(phy$edge)[1]
+  ROOT <- n + 1L
+  anc <- phy$edge[, 1]
+  des <- phy$edge[, 2]
   dis = pruningwise.distFromRoot(phy) # distance from root to each tip
   
   ## check condition and initialize for Logistic models
   if (method %in% c("logistic_MPLE","logistic_IG10")) {    
     if ( sum(!(y %in% c(0,1))) )
-      stop("The model by Ives and Garland requires a binary response (dependent variable).")
-    if (var(y)==0) stop("the response (dependent variable) is always 0 or always 1.")  
+      stop("The model by Ives and Garland requires a binary (0 or 1) response (dependent variable).")
+    y = as.numeric(as.factor(y)) - 1 ### Make sure taht the reponse is now a binary numeric vector
+    if (all(duplicated(y)[-1L])) stop("the response (dependent variable) is always 0 or always 1.")  
     
     btouch = 0
     proposedBetaSD = 0.05
@@ -394,13 +410,16 @@ phyloglm <- function(formula, data=list(), phy, method=c("logistic_MPLE","logist
       convergeflag = opt$convergence
     }
     
+    alphaWarn = 0
+    
     if ((lL - log(Tmax) + 0.02) > log.alpha.bound) {
       warn = paste("the estimate of 'alpha' (",1/exp(lL),
                    ") reached the lower bound (",1/Tmax/exp(log.alpha.bound),
-                   ").\n This may reflect a flat likelihood at low alpha values near 0,\n",
+                   ").\n This may reflect a flat likelihood at low alpha values near the lower bound,\n",
                    " meaning that the phylogenetic correlation is estimated to be maximal\n",
                    " under the model in Ives and Garland (2010).", sep="")
       warning(warn)	
+      alphaWarn = 1
     }
     if ((lL - log(Tmax) - 0.02) < - log.alpha.bound) {
       warn = paste("the estimate of 'alpha' (",1/exp(lL),
@@ -408,6 +427,7 @@ phyloglm <- function(formula, data=list(), phy, method=c("logistic_MPLE","logist
                    ").\n This may simply reflect a flat likelihood at large alpha values,\n",
                    " meaning that the phylogenetic correlation is estimated to be negligible.",sep="")
       warning(warn)	
+      alphaWarn = 2
     }
     if (btouch == 1) 
       warning("the boundary of the linear predictor has been reached during the optimization procedure.
@@ -449,6 +469,7 @@ You can increase this bound by increasing 'btol'.")
     results$logLik    = llh(results$fitted.values, results$alpha)
     results$penlogLik = results$logLik + log(det(as.matrix(plogregBSE$info)))/2
     results$aic       = -2*results$logLik + 2*(dk+1)
+    results$alphaWarn = alphaWarn
   }  
   
   if (method == "poisson_GEE") {

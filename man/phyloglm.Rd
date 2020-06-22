@@ -50,6 +50,7 @@ phyloglm(formula, data, phy, method = c("logistic_MPLE","logistic_IG10",
   \item{call}{the original call to the function.}
   \item{method}{the estimation method.}
   \item{convergence}{An integer code with '0' for successful optimization. With logistic_MPLE, this is the convergence code from the \code{optim} routine.}
+  \item{alphaWarn}{(logistic regression only) An interger code with '0' for the estimate of alpha is not near the lower and upper bounds, code with '1' for the estimate of alpha near the lower bound, code with '2' for the estimate of alpha near the upper bound.}
   \item{X}{a design matrix with one row for each tip in the phylogenetic tree.}
   \item{bootmean}{(\code{boot > 0} only) bootstrap means of the parameters estimated.}
   \item{bootsd}{(\code{boot > 0} only) bootstrap standard deviations of the estimated parameters.}
@@ -69,7 +70,7 @@ for binary dependent variables".  Systematic Biology \bold{59}:9-26.
 
 Paradis E. and Claude J. 2002. "Analysis of Comparative Data Using Generalized Estimating Equations". Journal of Theoretical Biology \bold{218}:175-185.
 }
-\author{Lam Si Tung Ho, Robert Lachlan, Rachel Feldman and C?cile An?}
+\author{Lam Si Tung Ho, Robert Lachlan, Rachel Feldman and Cecile Ane}
 \note{
 The tip labels in the tree are matched to the data names (row names in
 the data frame). If no data frame is provided through the argument \code{data},
