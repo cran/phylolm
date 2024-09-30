@@ -11,7 +11,7 @@ importFrom("stats", "AIC", "add.scope", "binomial", "coef",
              "logLik", "model.frame", "model.matrix", "model.response",
              "optim", "pnorm", "poisson", "printCoefmat", "pt",
              "quantile", "reorder", "rnorm", "runif", "sd", "terms",
-             "var", "nobs")
+             "var", "nobs", "confint", "cor")
 importFrom("graphics", "hist", "mtext", "points")
 importFrom("stats", "chisq.test", "optimize", "pbeta")
 importFrom("utils", "flush.console")
@@ -24,6 +24,7 @@ S3method(extractAIC, phylolm)
 S3method(logLik, phyloglm)
 S3method(logLik, phylolm)
 S3method(nobs, phylolm)
+S3method(nobs, phyloglm)
 S3method(plot, OUshifts)
 S3method(plot, phyloglm)
 S3method(plot, phylolm)
@@ -40,3 +41,5 @@ S3method(summary, phyloglm)
 S3method(summary, phylolm)
 S3method(vcov, phyloglm)
 S3method(vcov, phylolm)
+S3method(confint, phylolm)
+S3method(model.frame, phylolm)
